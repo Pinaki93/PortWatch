@@ -39,7 +39,7 @@ You need a current Rust toolchain plus the native `lsof` and `ps` commands.
 
 ```bash
 git clone https://github.com/Pinaki93/PortWatch.git
-cd port-watch
+cd PortWatch
 cargo loco start
 ```
 
