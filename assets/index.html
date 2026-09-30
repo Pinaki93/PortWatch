@@ -1,0 +1,511 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Port Watch — Local server radar</title>
+  <style>
+    :root {
+      --ink: #151515;
+      --paper: #f5f0e6;
+      --acid: #d7ff3f;
+      --sky: #82d9ff;
+      --coral: #ff6b57;
+      --violet: #b9a3ff;
+      --white: #fffdf7;
+      --muted: #6b675f;
+      --border: 3px solid var(--ink);
+      --shadow: 6px 6px 0 var(--ink);
+    }
+
+    * { box-sizing: border-box; }
+    html { background: var(--ink); }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background:
+        linear-gradient(90deg, rgba(21,21,21,.055) 1px, transparent 1px),
+        linear-gradient(rgba(21,21,21,.055) 1px, transparent 1px),
+        var(--paper);
+      background-size: 28px 28px;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    button, input { font: inherit; }
+    button { color: inherit; }
+    .shell { width: min(1440px, 100%); margin: 0 auto; padding: 22px 28px 48px; }
+
+    .topbar {
+      display: flex;
+      align-items: stretch;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 34px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 18px 12px 12px;
+      border: var(--border);
+      background: var(--acid);
+      box-shadow: var(--shadow);
+      transform: rotate(-.35deg);
+    }
+
+    .brand-mark {
+      display: grid;
+      place-items: center;
+      width: 45px;
+      height: 45px;
+      border: var(--border);
+      background: var(--ink);
+      color: var(--acid);
+      font-size: 23px;
+      font-weight: 1000;
+    }
+
+    .brand strong { display: block; font-size: clamp(19px, 2vw, 27px); line-height: .9; letter-spacing: -.055em; }
+    .brand small { display: block; margin-top: 5px; font: 700 10px/1 monospace; letter-spacing: .14em; text-transform: uppercase; }
+
+    .status-box {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 260px;
+      padding: 12px 16px;
+      border: var(--border);
+      background: var(--white);
+      box-shadow: 4px 4px 0 var(--ink);
+    }
+
+    .radar {
+      position: relative;
+      width: 36px;
+      height: 36px;
+      flex: 0 0 36px;
+      border: 3px solid var(--ink);
+      border-radius: 50%;
+      background: var(--acid);
+      overflow: hidden;
+    }
+
+    .radar::before {
+      content: "";
+      position: absolute;
+      inset: 3px 16px 16px 3px;
+      border: 2px solid var(--ink);
+      border-width: 0 3px 3px 0;
+      transform-origin: 100% 100%;
+      animation: sweep 2s linear infinite;
+    }
+
+    @keyframes sweep { to { transform: rotate(360deg); } }
+    .status-copy strong { display: block; font: 900 12px/1.2 monospace; text-transform: uppercase; letter-spacing: .08em; }
+    .status-copy span { display: block; margin-top: 4px; color: var(--muted); font: 600 11px/1.25 monospace; }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(290px, .65fr);
+      gap: 24px;
+      align-items: end;
+      margin-bottom: 28px;
+    }
+
+    h1 {
+      max-width: 920px;
+      margin: 0;
+      font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
+      font-size: clamp(58px, 9vw, 138px);
+      font-weight: 900;
+      line-height: .78;
+      letter-spacing: -.045em;
+      text-transform: uppercase;
+    }
+
+    h1 .stroke { color: var(--paper); -webkit-text-stroke: 3px var(--ink); text-shadow: 5px 5px 0 var(--coral); }
+    .intro {
+      padding: 20px;
+      border: var(--border);
+      background: var(--sky);
+      box-shadow: var(--shadow);
+      font-size: clamp(15px, 1.5vw, 19px);
+      font-weight: 750;
+      line-height: 1.35;
+      transform: rotate(.6deg);
+    }
+    .intro code { padding: 2px 5px; border: 2px solid var(--ink); background: var(--white); font: 800 .8em monospace; }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat {
+      position: relative;
+      min-height: 126px;
+      padding: 16px 18px;
+      border: var(--border);
+      background: var(--white);
+      box-shadow: 5px 5px 0 var(--ink);
+      overflow: hidden;
+    }
+    .stat:nth-child(2) { background: var(--violet); }
+    .stat:nth-child(3) { background: var(--coral); }
+    .stat:nth-child(4) { background: var(--acid); }
+    .stat-label { display: flex; justify-content: space-between; gap: 8px; font: 900 11px/1 monospace; letter-spacing: .09em; text-transform: uppercase; }
+    .stat-value { margin-top: 17px; font: 1000 clamp(35px, 4vw, 55px)/.8 Impact, sans-serif; letter-spacing: -.02em; }
+    .stat-value.machine { overflow: hidden; font-size: clamp(22px, 2.5vw, 36px); text-overflow: ellipsis; white-space: nowrap; }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 300px;
+      gap: 20px;
+      align-items: start;
+    }
+
+    .panel { border: var(--border); background: var(--white); box-shadow: var(--shadow); }
+    .panel-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px;
+      border-bottom: var(--border);
+      background: var(--ink);
+      color: var(--white);
+    }
+    .panel-head h2 { margin: 0; font-size: 18px; line-height: 1; text-transform: uppercase; letter-spacing: -.03em; }
+
+    .filters { display: flex; flex-wrap: wrap; gap: 8px; }
+    .filter, .scan-btn, .close-btn, .action {
+      border: 2px solid currentColor;
+      background: transparent;
+      padding: 7px 10px;
+      font: 900 10px/1 monospace;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    .filter:hover, .filter.active { background: var(--acid); color: var(--ink); }
+    .scan-btn { background: var(--acid); color: var(--ink); }
+    .scan-btn:hover { transform: translate(-2px, -2px); box-shadow: 3px 3px 0 var(--white); }
+    .scan-btn:active { transform: none; box-shadow: none; }
+
+    .search-row { padding: 12px; border-bottom: var(--border); background: var(--sky); }
+    .search {
+      width: 100%;
+      padding: 11px 13px;
+      border: var(--border);
+      border-radius: 0;
+      outline: none;
+      background: var(--white);
+      color: var(--ink);
+      font: 750 13px/1 monospace;
+      box-shadow: 3px 3px 0 var(--ink);
+    }
+    .search:focus { background: var(--acid); }
+
+    .server-list { display: grid; gap: 0; }
+    .server {
+      display: grid;
+      grid-template-columns: 64px minmax(160px, 1.15fr) minmax(140px, .8fr) 110px 126px;
+      gap: 14px;
+      align-items: center;
+      min-height: 88px;
+      padding: 13px 15px;
+      border: 0;
+      border-bottom: 2px solid var(--ink);
+      background: var(--white);
+      text-align: left;
+      cursor: pointer;
+      transition: background 120ms ease, padding-left 120ms ease;
+    }
+    .server:last-child { border-bottom: 0; }
+    .server:hover, .server:focus-visible { padding-left: 20px; background: #fff7cf; outline: 0; }
+    .server.new { animation: arrival 1.2s ease; }
+    @keyframes arrival { 0%, 35% { background: var(--acid); } }
+    .port { font: 1000 26px/1 Impact, sans-serif; }
+    .process { min-width: 0; }
+    .process strong { display: flex; align-items: center; gap: 7px; overflow: hidden; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+    .process small, .endpoint small, .metric small { display: block; margin-top: 5px; color: var(--muted); font: 700 10px/1.2 monospace; }
+    .endpoint { min-width: 0; overflow: hidden; font: 800 12px/1.2 monospace; text-overflow: ellipsis; white-space: nowrap; }
+    .badge { display: inline-flex; width: fit-content; padding: 5px 7px; border: 2px solid var(--ink); background: var(--acid); font: 900 9px/1 monospace; text-transform: uppercase; }
+    .badge.exposed { background: var(--coral); }
+    .new-tag { padding: 3px 5px; border: 2px solid var(--ink); background: var(--violet); font: 900 8px/1 monospace; }
+    .metric { font: 900 12px/1 monospace; }
+
+    .empty { padding: 60px 25px; text-align: center; }
+    .empty strong { display: block; font: 1000 40px/1 Impact, sans-serif; text-transform: uppercase; }
+    .empty p { margin: 12px auto 0; max-width: 430px; color: var(--muted); font-weight: 650; }
+
+    .feed { position: sticky; top: 18px; }
+    .feed .panel-head { background: var(--coral); color: var(--ink); }
+    .events { max-height: 490px; overflow: auto; }
+    .event { padding: 13px 14px; border-bottom: 2px solid var(--ink); font: 700 11px/1.4 monospace; }
+    .event:last-child { border-bottom: 0; }
+    .event strong { display: block; margin-bottom: 3px; text-transform: uppercase; }
+    .event.join strong { color: #3c6900; }
+    .event.leave strong { color: #a72716; }
+    .event time { color: var(--muted); }
+    .feed-note { padding: 14px; border-top: var(--border); background: var(--violet); font: 800 10px/1.45 monospace; }
+
+    .error {
+      display: none;
+      margin: 0 0 20px;
+      padding: 13px 16px;
+      border: var(--border);
+      background: var(--coral);
+      box-shadow: var(--shadow);
+      font-weight: 800;
+    }
+    .error.visible { display: block; }
+
+    dialog {
+      width: min(680px, calc(100% - 28px));
+      max-height: calc(100vh - 40px);
+      padding: 0;
+      border: var(--border);
+      background: var(--white);
+      color: var(--ink);
+      box-shadow: 10px 10px 0 var(--ink);
+    }
+    dialog::backdrop { background: rgba(21, 21, 21, .68); backdrop-filter: blur(2px); }
+    .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px; border-bottom: var(--border); background: var(--acid); }
+    .modal-head h2 { margin: 0; font: 1000 28px/1 Impact, sans-serif; text-transform: uppercase; }
+    .close-btn { padding: 8px; background: var(--white); }
+    .details { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+    .detail { min-width: 0; padding: 13px 16px; border-right: 2px solid var(--ink); border-bottom: 2px solid var(--ink); }
+    .detail:nth-child(even) { border-right: 0; }
+    .detail.wide { grid-column: 1 / -1; border-right: 0; }
+    .detail label { display: block; margin-bottom: 6px; color: var(--muted); font: 900 9px/1 monospace; letter-spacing: .08em; text-transform: uppercase; }
+    .detail code { display: block; overflow-wrap: anywhere; font: 750 12px/1.4 monospace; }
+    .modal-actions { display: flex; flex-wrap: wrap; gap: 10px; padding: 15px; }
+    .action { border: var(--border); background: var(--sky); text-decoration: none; }
+    .action.primary { background: var(--coral); }
+
+    .footer { display: flex; justify-content: space-between; gap: 16px; margin-top: 28px; font: 800 10px/1.5 monospace; text-transform: uppercase; }
+    .footer a { color: inherit; }
+
+    @media (max-width: 980px) {
+      .hero, .workspace { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: 1fr 1fr; }
+      .feed { position: static; }
+      .events { max-height: 250px; }
+    }
+
+    @media (max-width: 720px) {
+      .shell { padding: 14px 14px 34px; }
+      .topbar { align-items: stretch; flex-direction: column; }
+      .status-box { min-width: 0; }
+      h1 { font-size: clamp(55px, 20vw, 92px); }
+      .stats { gap: 10px; }
+      .stat { min-height: 106px; padding: 13px; }
+      .server { grid-template-columns: 56px minmax(0, 1fr) auto; }
+      .server .endpoint, .server .metric { display: none; }
+      .details { grid-template-columns: 1fr; }
+      .detail, .detail:nth-child(even) { border-right: 0; }
+      .footer { flex-direction: column; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand" aria-label="Port Watch">
+        <span class="brand-mark">PW</span>
+        <span><strong>PORT / WATCH</strong><small>Local server radar</small></span>
+      </div>
+      <div class="status-box" aria-live="polite">
+        <span class="radar" aria-hidden="true"></span>
+        <span class="status-copy"><strong id="scan-status">Scanning machine</strong><span id="last-scan">Waiting for first snapshot…</span></span>
+      </div>
+    </header>
+
+    <section class="hero">
+      <h1>WHO'S<br><span class="stroke">LISTENING?</span></h1>
+      <div class="intro">A live map of every visible TCP listener on this machine. New ports announce themselves automatically—straight from <code>lsof</code>, no agent soup required.</div>
+    </section>
+
+    <div id="error" class="error" role="alert"></div>
+
+    <section class="stats" aria-label="Listener summary">
+      <article class="stat"><div class="stat-label">Open listeners <span>01</span></div><div class="stat-value" id="listener-count">—</div></article>
+      <article class="stat"><div class="stat-label">Unique processes <span>02</span></div><div class="stat-value" id="process-count">—</div></article>
+      <article class="stat"><div class="stat-label">Network exposed <span>03</span></div><div class="stat-value" id="exposed-count">—</div></article>
+      <article class="stat"><div class="stat-label">Watching <span>04</span></div><div class="stat-value machine" id="hostname">—</div></article>
+    </section>
+
+    <section class="workspace">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Live listeners <span id="visible-count"></span></h2>
+          <div class="filters" aria-label="Filter listeners">
+            <button class="filter active" data-filter="all" type="button">All</button>
+            <button class="filter" data-filter="loopback" type="button">Loopback</button>
+            <button class="filter" data-filter="exposed" type="button">Exposed</button>
+            <button id="scan-now" class="scan-btn" type="button">↻ Scan now</button>
+          </div>
+        </div>
+        <div class="search-row"><input id="search" class="search" type="search" placeholder="SEARCH PROCESS, PID, ADDRESS OR PORT…" aria-label="Search listeners"></div>
+        <div id="server-list" class="server-list" aria-live="polite"></div>
+      </div>
+
+      <aside class="panel feed">
+        <div class="panel-head"><h2>Activity tape</h2><span aria-hidden="true">● REC</span></div>
+        <div id="events" class="events"><div class="event"><strong>Radar armed</strong><span>Changes will appear here.</span></div></div>
+        <div class="feed-note">AUTO-SCAN / 2 SEC<br>VISIBLE PROCESSES ONLY</div>
+      </aside>
+    </section>
+
+    <footer class="footer"><span>Built with Rust + Loco · snapshot API at <a href="/api/servers">/api/servers</a></span><span id="platform">Detecting platform…</span></footer>
+  </main>
+
+  <dialog id="details-dialog">
+    <div class="modal-head"><h2 id="detail-title">Listener details</h2><button id="close-dialog" class="close-btn" type="button" aria-label="Close details">✕</button></div>
+    <div id="details" class="details"></div>
+    <div id="modal-actions" class="modal-actions"></div>
+  </dialog>
+
+  <script>
+    const state = { servers: [], previous: new Map(), firstSeen: new Map(), fresh: new Set(), filter: 'all', query: '', initialized: false, busy: false };
+    const list = document.querySelector('#server-list');
+    const dialog = document.querySelector('#details-dialog');
+    const escapeHtml = value => String(value ?? '—').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
+    const scopeLabel = scope => scope === 'loopback' ? 'Loopback only' : scope === 'all-interfaces' ? 'All interfaces' : 'Local network';
+    const when = () => new Intl.DateTimeFormat([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date());
+
+    function addEvent(kind, title, body) {
+      const events = document.querySelector('#events');
+      if (state.initialized && events.children.length === 1 && events.textContent.includes('Radar armed')) events.innerHTML = '';
+      const row = document.createElement('div');
+      row.className = `event ${kind}`;
+      row.innerHTML = `<strong>${escapeHtml(title)}</strong><span>${escapeHtml(body)}</span><br><time>${when()}</time>`;
+      events.prepend(row);
+      while (events.children.length > 20) events.lastElementChild.remove();
+    }
+
+    function filteredServers() {
+      const query = state.query.toLowerCase();
+      return state.servers.filter(server => {
+        const scopeMatches = state.filter === 'all' || (state.filter === 'loopback' && server.scope === 'loopback') || (state.filter === 'exposed' && server.scope !== 'loopback');
+        const haystack = `${server.process} ${server.pid} ${server.address} ${server.port} ${server.user} ${server.command}`.toLowerCase();
+        return scopeMatches && (!query || haystack.includes(query));
+      });
+    }
+
+    function render() {
+      const servers = filteredServers();
+      document.querySelector('#visible-count').textContent = `(${servers.length})`;
+      if (!servers.length) {
+        list.innerHTML = `<div class="empty"><strong>Nothing on radar</strong><p>No listeners match this view. Clear the search or try a different scope.</p></div>`;
+        return;
+      }
+      list.innerHTML = servers.map(server => {
+        const fresh = state.fresh.has(server.id);
+        const endpoint = `${server.address}:${server.port}`;
+        const cpu = server.cpu_percent == null ? '—' : `${server.cpu_percent.toFixed(1)}%`;
+        return `<button class="server ${fresh ? 'new' : ''}" type="button" data-id="${escapeHtml(server.id)}">
+          <span class="port">:${server.port}</span>
+          <span class="process"><strong>${escapeHtml(server.process)} ${fresh ? '<span class="new-tag">NEW</span>' : ''}</strong><small>PID ${server.pid} · ${escapeHtml(server.user)}</small></span>
+          <span class="endpoint">${escapeHtml(endpoint)}<small>${server.ip_version} / ${server.protocol}</small></span>
+          <span class="metric">${cpu}<small>CPU</small></span>
+          <span class="badge ${server.scope === 'loopback' ? '' : 'exposed'}">${escapeHtml(scopeLabel(server.scope))}</span>
+        </button>`;
+      }).join('');
+    }
+
+    function showDetails(server) {
+      const fields = [
+        ['Process', server.process], ['Status', server.status], ['PID', server.pid], ['Parent PID', server.parent_pid],
+        ['User', server.user], ['Scope', scopeLabel(server.scope)], ['Address', server.address], ['Port', server.port],
+        ['Protocol', `${server.protocol} / ${server.ip_version}`], ['File descriptor', server.file_descriptor],
+        ['CPU', server.cpu_percent == null ? null : `${server.cpu_percent}%`], ['Memory', server.memory_percent == null ? null : `${server.memory_percent}%`],
+        ['Started', server.started_at], ['Executable', server.executable], ['Command', server.command, true]
+      ];
+      document.querySelector('#detail-title').textContent = `${server.process} :${server.port}`;
+      document.querySelector('#details').innerHTML = fields.map(([label, value, wide]) => `<div class="detail ${wide ? 'wide' : ''}"><label>${label}</label><code>${escapeHtml(value)}</code></div>`).join('');
+      document.querySelector('#modal-actions').innerHTML = `<button class="action" type="button" id="copy-endpoint">Copy endpoint</button>${server.url ? `<a class="action primary" href="${escapeHtml(server.url)}" target="_blank" rel="noreferrer">Open probable URL ↗</a>` : ''}`;
+      document.querySelector('#copy-endpoint').addEventListener('click', async event => {
+        await navigator.clipboard.writeText(`${server.address}:${server.port}`);
+        event.currentTarget.textContent = 'Copied!';
+      });
+      dialog.showModal();
+    }
+
+    async function scan() {
+      if (state.busy) return;
+      state.busy = true;
+      document.querySelector('#scan-status').textContent = 'Scanning machine';
+      try {
+        const response = await fetch('/api/servers', { cache: 'no-store' });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || 'Listener scan failed');
+        const next = new Map(data.servers.map(server => [server.id, server]));
+        state.fresh.clear();
+        if (state.initialized) {
+          for (const [id, server] of next) if (!state.previous.has(id)) {
+            state.fresh.add(id);
+            state.firstSeen.set(id, Date.now());
+            addEvent('join', 'New listener', `${server.process} opened :${server.port}`);
+          }
+          for (const [id, server] of state.previous) if (!next.has(id)) addEvent('leave', 'Listener closed', `${server.process} left :${server.port}`);
+        } else {
+          for (const id of next.keys()) state.firstSeen.set(id, Date.now());
+        }
+        state.servers = data.servers;
+        state.previous = next;
+        state.initialized = true;
+        document.querySelector('#listener-count').textContent = data.listener_count;
+        document.querySelector('#process-count').textContent = data.process_count;
+        document.querySelector('#exposed-count').textContent = data.exposed_count;
+        document.querySelector('#hostname').textContent = data.hostname;
+        document.querySelector('#hostname').title = data.hostname;
+        document.querySelector('#platform').textContent = `${data.os} / ${data.architecture}`;
+        document.querySelector('#last-scan').textContent = `Last scan ${new Date(Number(data.scanned_at)).toLocaleTimeString()} · every 2 sec`;
+        document.querySelector('#scan-status').textContent = 'Radar online';
+        document.querySelector('#error').classList.remove('visible');
+        render();
+        setTimeout(() => { state.fresh.clear(); render(); }, 2800);
+      } catch (error) {
+        document.querySelector('#scan-status').textContent = 'Radar interrupted';
+        const banner = document.querySelector('#error');
+        banner.textContent = error.message;
+        banner.classList.add('visible');
+      } finally {
+        state.busy = false;
+      }
+    }
+
+    list.addEventListener('click', event => {
+      const row = event.target.closest('[data-id]');
+      if (!row) return;
+      const server = state.servers.find(item => item.id === row.dataset.id);
+      if (server) showDetails(server);
+    });
+    document.querySelectorAll('.filter').forEach(button => button.addEventListener('click', () => {
+      document.querySelectorAll('.filter').forEach(item => item.classList.remove('active'));
+      button.classList.add('active');
+      state.filter = button.dataset.filter;
+      render();
+    }));
+    document.querySelector('#search').addEventListener('input', event => { state.query = event.target.value; render(); });
+    document.querySelector('#scan-now').addEventListener('click', scan);
+    document.querySelector('#close-dialog').addEventListener('click', () => dialog.close());
+    dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
+
+    scan();
+    setInterval(scan, 2000);
+  </script>
+</body>
+</html>
