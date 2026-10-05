@@ -1,0 +1,14 @@
+[package]
+name = "mydeck"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }
+loco-rs = { workspace = true, features = ["cli"] }
+port_watch = { path = ".." }
+tokio = { version = "1.45", default-features = false, features = [
+  "macros",
+  "rt-multi-thread",
+] }

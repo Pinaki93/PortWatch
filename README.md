@@ -49,6 +49,16 @@ Open **[localhost:5150](http://localhost:5150)**. To use another port:
 PORT=5151 cargo loco start
 ```
 
+Or use the MyDeck CLI:
+
+```bash
+cargo install --path mydeck-cli
+mydeck serve
+mydeck serve --port 5151
+```
+
+Once installed, `mydeck` can be run from any directory.
+
 ## ◼ REST API
 
 | Method | Route | Response |
