@@ -17,6 +17,8 @@ target/
 
 *.sqlite
 *.sqlite-*
+/servers.json
+/servers.json.tmp
 
 # Local framework instructions for coding agents
 /.claude/

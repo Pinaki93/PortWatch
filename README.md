@@ -27,7 +27,7 @@ activity tape calls it out immediately.
 | **RADAR** | **PROCESS INTEL** | **UI** |
 |:---|:---|:---|
 | Detects new and closed listeners | PID, parent PID, user, command, executable | Neo-brutalist, responsive dashboard |
-| Loopback vs network exposure | CPU, memory, start time, file descriptor | Search, scope filters, detail drawer |
+| Loopback vs network exposure | CPU, memory, start time, file descriptor | Search, pinning, custom open commands |
 | IPv4 + IPv6 deduplication | Probable HTTP URL when identifiable | Live arrival/departure tape |
 
 > [!NOTE]
@@ -65,6 +65,8 @@ Once installed, `mydeck` can be run from any directory.
 |:---:|:---|:---|
 | `GET` | `/api` | Application metadata and route index |
 | `GET` | `/api/servers` | Current enriched listener snapshot |
+| `POST` | `/api/pins` | Pin, update, or unpin a server |
+| `POST` | `/api/open` | Run a pinned server's custom open command |
 | `GET` | `/_ping` | Loco liveness check |
 | `GET` | `/_health` | Loco health check |
 | `GET` | `/_readiness` | Loco readiness check |
@@ -104,6 +106,10 @@ Once installed, `mydeck` can be run from any directory.
 The UI is a single embedded HTML file. Loco serves it and the JSON API from the same Rust
 binary, so there is no Node toolchain or separate asset build.
 
+Pinned servers and their optional custom open commands are stored in `servers.json` as a
+JSON array. Open a listener's detail panel to pin it or set a command. Commands can use
+`{url}`, `{host}`, and `{port}` placeholders and run only when **Open custom** is clicked.
+
 ## ◼ Development
 
 ```bash
@@ -122,6 +128,7 @@ boots the real Loco app and verifies the dashboard and API.
 assets/index.html          dashboard, styles, and live client
 assets/readme-hero.svg     this README's neo-brutalist banner
 src/controllers/home.rs   routes, socket scan, process enrichment
+src/models/server_preferences.rs  JSON-backed pin and command storage
 src/views/home.rs         API response types
 tests/requests/home.rs    end-to-end request check
 ```

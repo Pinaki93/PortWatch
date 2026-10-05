@@ -8,6 +8,10 @@ use axum::http::StatusCode;
 use loco_rs::prelude::*;
 
 use crate::views::home::{AppInfo, ScanError, ServerInfo, ServerSnapshot};
+use crate::{
+    models::server_preferences::{self, PinnedServer},
+    views::home::{CommandResponse, OpenServerParams, PinServerParams},
+};
 
 const DASHBOARD: &str = include_str!("../../assets/index.html");
 
@@ -40,8 +44,48 @@ async fn current() -> Result<Response> {
         name: "Port Watch",
         version: env!("CARGO_PKG_VERSION"),
         description: "Live local TCP listener discovery, powered by Loco and Rust.",
-        endpoints: ["GET /", "GET /api", "GET /api/servers"],
+        endpoints: [
+            "GET /",
+            "GET /api",
+            "GET /api/servers",
+            "POST /api/pins",
+            "POST /api/open",
+        ],
     })
+}
+
+#[debug_handler]
+async fn pin(Json(params): Json<PinServerParams>) -> Result<Response> {
+    let servers = server_preferences::set(
+        PinnedServer {
+            process: params.process,
+            address: params.address,
+            port: params.port,
+            url: params.url,
+            custom_command: params.custom_command,
+        },
+        params.pinned,
+    )?;
+    format::json(servers)
+}
+
+#[debug_handler]
+async fn open(Json(params): Json<OpenServerParams>) -> Result<Response> {
+    let Some(server) = server_preferences::list()?
+        .into_iter()
+        .find(|item| item.matches(&params.process, &params.address, params.port))
+    else {
+        return bad_request("pin this server before running a custom command");
+    };
+    let Some(command) = server.rendered_command() else {
+        return bad_request("this server does not have a custom command");
+    };
+
+    let mut child = Command::new("sh").args(["-c", &command]).spawn()?;
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
+    format::json(CommandResponse { status: "launched" })
 }
 
 #[debug_handler]
@@ -62,6 +106,8 @@ pub fn routes() -> Routes {
         .add("/", get(dashboard))
         .add("/api", get(current))
         .add("/api/servers", get(servers))
+        .add("/api/pins", post(pin))
+        .add("/api/open", post(open))
 }
 
 fn scan_servers() -> std::result::Result<ServerSnapshot, String> {
@@ -80,7 +126,18 @@ fn scan_servers() -> std::result::Result<ServerSnapshot, String> {
         .filter_map(|line| line.strip_prefix('p')?.parse::<u32>().ok())
         .collect::<HashSet<_>>();
     let details = process_details(&pids);
-    let servers = parse_lsof(&raw, &details);
+    let mut servers = parse_lsof(&raw, &details);
+    let pinned = server_preferences::list().map_err(|error| error.to_string())?;
+    for server in &mut servers {
+        if let Some(preference) = pinned
+            .iter()
+            .find(|item| item.matches(&server.process, &server.address, server.port))
+        {
+            server.pinned = true;
+            server.custom_command.clone_from(&preference.custom_command);
+        }
+    }
+    servers.sort_by_key(|server| (!server.pinned, server.port, server.pid));
     let hostname = Command::new("hostname")
         .output()
         .ok()
@@ -237,6 +294,8 @@ fn parse_lsof(raw: &str, details: &HashMap<u32, ProcessDetails>) -> Vec<ServerIn
                     cpu_percent: detail.and_then(|item| item.cpu_percent),
                     memory_percent: detail.and_then(|item| item.memory_percent),
                     url,
+                    pinned: false,
+                    custom_command: None,
                 });
             }
             _ => {}

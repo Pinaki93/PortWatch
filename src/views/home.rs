@@ -1,11 +1,11 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize)]
 pub struct AppInfo {
     pub name: &'static str,
     pub version: &'static str,
     pub description: &'static str,
-    pub endpoints: [&'static str; 3],
+    pub endpoints: [&'static str; 5],
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -28,6 +28,8 @@ pub struct ServerInfo {
     pub cpu_percent: Option<f32>,
     pub memory_percent: Option<f32>,
     pub url: Option<String>,
+    pub pinned: bool,
+    pub custom_command: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -46,4 +48,26 @@ pub struct ServerSnapshot {
 pub struct ScanError {
     pub error: &'static str,
     pub message: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PinServerParams {
+    pub process: String,
+    pub address: String,
+    pub port: u16,
+    pub url: Option<String>,
+    pub custom_command: Option<String>,
+    pub pinned: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct OpenServerParams {
+    pub process: String,
+    pub address: String,
+    pub port: u16,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CommandResponse {
+    pub status: &'static str,
 }

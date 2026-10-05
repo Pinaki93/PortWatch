@@ -229,6 +229,7 @@
     }
     .server:last-child { border-bottom: 0; }
     .server:hover, .server:focus-visible { padding-left: 20px; background: #fff7cf; outline: 0; }
+    .server.pinned { background: #f1ffd0; box-shadow: inset 8px 0 0 var(--acid); }
     .server.new { animation: arrival 1.2s ease; }
     @keyframes arrival { 0%, 35% { background: var(--acid); } }
     .port { font: 1000 26px/1 Impact, sans-serif; }
@@ -239,6 +240,7 @@
     .badge { display: inline-flex; width: fit-content; padding: 5px 7px; border: 2px solid var(--ink); background: var(--acid); font: 900 9px/1 monospace; text-transform: uppercase; }
     .badge.exposed { background: var(--coral); }
     .new-tag { padding: 3px 5px; border: 2px solid var(--ink); background: var(--violet); font: 900 8px/1 monospace; }
+    .pin-tag { padding: 3px 5px; border: 2px solid var(--ink); background: var(--acid); font: 900 8px/1 monospace; }
     .metric { font: 900 12px/1 monospace; }
 
     .empty { padding: 60px 25px; text-align: center; }
@@ -289,6 +291,11 @@
     .modal-actions { display: flex; flex-wrap: wrap; gap: 10px; padding: 15px; }
     .action { border: var(--border); background: var(--sky); text-decoration: none; }
     .action.primary { background: var(--coral); }
+    .action.danger { background: var(--white); color: #a72716; }
+    .command-editor { display: grid; flex: 1 0 100%; gap: 7px; }
+    .command-editor label { font: 900 10px/1 monospace; letter-spacing: .08em; text-transform: uppercase; }
+    .command-editor input { width: 100%; padding: 10px 12px; border: var(--border); border-radius: 0; background: var(--white); font: 750 12px/1.3 monospace; }
+    .command-editor small { color: var(--muted); font: 700 10px/1.4 monospace; }
 
     .footer { display: flex; justify-content: space-between; gap: 16px; margin-top: 28px; font: 800 10px/1.5 monospace; text-transform: uppercase; }
     .footer a { color: inherit; }
@@ -415,9 +422,9 @@
         const fresh = state.fresh.has(server.id);
         const endpoint = `${server.address}:${server.port}`;
         const cpu = server.cpu_percent == null ? '—' : `${server.cpu_percent.toFixed(1)}%`;
-        return `<button class="server ${fresh ? 'new' : ''}" type="button" data-id="${escapeHtml(server.id)}">
+        return `<button class="server ${fresh ? 'new' : ''} ${server.pinned ? 'pinned' : ''}" type="button" data-id="${escapeHtml(server.id)}">
           <span class="port">:${server.port}</span>
-          <span class="process"><strong>${escapeHtml(server.process)} ${fresh ? '<span class="new-tag">NEW</span>' : ''}</strong><small>PID ${server.pid} · ${escapeHtml(server.user)}</small></span>
+          <span class="process"><strong>${escapeHtml(server.process)} ${server.pinned ? '<span class="pin-tag">PINNED</span>' : ''} ${fresh ? '<span class="new-tag">NEW</span>' : ''}</strong><small>PID ${server.pid} · ${escapeHtml(server.user)}</small></span>
           <span class="endpoint">${escapeHtml(endpoint)}<small>${server.ip_version} / ${server.protocol}</small></span>
           <span class="metric">${cpu}<small>CPU</small></span>
           <span class="badge ${server.scope === 'loopback' ? '' : 'exposed'}">${escapeHtml(scopeLabel(server.scope))}</span>
@@ -431,16 +438,91 @@
         ['User', server.user], ['Scope', scopeLabel(server.scope)], ['Address', server.address], ['Port', server.port],
         ['Protocol', `${server.protocol} / ${server.ip_version}`], ['File descriptor', server.file_descriptor],
         ['CPU', server.cpu_percent == null ? null : `${server.cpu_percent}%`], ['Memory', server.memory_percent == null ? null : `${server.memory_percent}%`],
-        ['Started', server.started_at], ['Executable', server.executable], ['Command', server.command, true]
+        ['Started', server.started_at], ['Pinned', server.pinned ? 'Yes' : 'No'], ['Executable', server.executable], ['Command', server.command, true]
       ];
       document.querySelector('#detail-title').textContent = `${server.process} :${server.port}`;
       document.querySelector('#details').innerHTML = fields.map(([label, value, wide]) => `<div class="detail ${wide ? 'wide' : ''}"><label>${label}</label><code>${escapeHtml(value)}</code></div>`).join('');
-      document.querySelector('#modal-actions').innerHTML = `<button class="action" type="button" id="copy-endpoint">Copy endpoint</button>${server.url ? `<a class="action primary" href="${escapeHtml(server.url)}" target="_blank" rel="noreferrer">Open probable URL ↗</a>` : ''}`;
+      document.querySelector('#modal-actions').innerHTML = `<div class="command-editor">
+        <label for="custom-command">Custom open command</label>
+        <input id="custom-command" value="${escapeHtml(server.custom_command || '')}" placeholder="open -a Safari {url}" maxlength="4096" spellcheck="false">
+        <small>Optional placeholders: {url}, {host}, and {port}. Commands run locally only when you click Open custom.</small>
+      </div>
+      <button class="action" type="button" id="copy-endpoint">Copy endpoint</button>
+      <button class="action" type="button" id="save-pin">${server.pinned ? 'Save pin settings' : 'Pin server'}</button>
+      ${server.pinned ? '<button class="action danger" type="button" id="unpin-server">Unpin server</button>' : ''}
+      ${server.custom_command ? '<button class="action primary" type="button" id="open-custom">Open custom ↗</button>' : ''}
+      ${server.url ? `<a class="action primary" href="${escapeHtml(server.url)}" target="_blank" rel="noreferrer">Open probable URL ↗</a>` : ''}`;
       document.querySelector('#copy-endpoint').addEventListener('click', async event => {
         await navigator.clipboard.writeText(`${server.address}:${server.port}`);
         event.currentTarget.textContent = 'Copied!';
       });
+      document.querySelector('#save-pin').addEventListener('click', async event => {
+        event.currentTarget.disabled = true;
+        try {
+          await savePin(server, true, document.querySelector('#custom-command').value);
+          server.pinned = true;
+          server.custom_command = document.querySelector('#custom-command').value.trim() || null;
+          state.servers.sort((left, right) => Number(right.pinned) - Number(left.pinned) || left.port - right.port || left.pid - right.pid);
+          render();
+          dialog.close();
+          showDetails(server);
+        } catch (error) {
+          showError(error);
+          event.currentTarget.disabled = false;
+        }
+      });
+      document.querySelector('#unpin-server')?.addEventListener('click', async event => {
+        event.currentTarget.disabled = true;
+        try {
+          await savePin(server, false, null);
+          server.pinned = false;
+          server.custom_command = null;
+          render();
+          dialog.close();
+        } catch (error) {
+          showError(error);
+          event.currentTarget.disabled = false;
+        }
+      });
+      document.querySelector('#open-custom')?.addEventListener('click', async event => {
+        event.currentTarget.disabled = true;
+        try {
+          await postJson('/api/open', { process: server.process, address: server.address, port: server.port });
+          event.currentTarget.textContent = 'Launched!';
+        } catch (error) {
+          showError(error);
+          event.currentTarget.disabled = false;
+        }
+      });
       dialog.showModal();
+    }
+
+    async function postJson(url, body) {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.description || data.error || `Request failed (${response.status})`);
+      return data;
+    }
+
+    function savePin(server, pinned, customCommand) {
+      return postJson('/api/pins', {
+        process: server.process,
+        address: server.address,
+        port: server.port,
+        url: server.url,
+        custom_command: customCommand,
+        pinned
+      });
+    }
+
+    function showError(error) {
+      const banner = document.querySelector('#error');
+      banner.textContent = error.message;
+      banner.classList.add('visible');
     }
 
     async function scan() {
@@ -479,9 +561,7 @@
         setTimeout(() => { state.fresh.clear(); render(); }, 2800);
       } catch (error) {
         document.querySelector('#scan-status').textContent = 'Radar interrupted';
-        const banner = document.querySelector('#error');
-        banner.textContent = error.message;
-        banner.classList.add('visible');
+        showError(error);
       } finally {
         state.busy = false;
       }
